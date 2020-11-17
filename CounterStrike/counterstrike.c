@@ -73,23 +73,23 @@ void *terrorista(void *arg)
   MUDA_ESTADO(n, ANDANDO);
   while (1)
   {
+    sleep(rand() % 10);
     pthread_mutex_lock(&lock_player);
-    if (estados[n].estado != MORTO)
-    {
-
-      printf("Terrorista %d \t estado: %d\n", n, estados[n].estado);
-      procura_combate(n);
-    }
     if (contador_rodadas_terrorista == 15 || contador_rodadas_contraterrorista == 15)
     {
       break;
+    }
+    if (estados[n].estado != MORTO && contador_contraterrorista > 0)
+    {
+
+      printf("Terrorista %d\n", n);
+      procura_combate(n);
     }
     if (contador_contraterrorista == 0 || contador_terroristas == 0)
     {
       reseta_rodada();
     }
     pthread_mutex_unlock(&lock_player);
-    sleep(rand() % 30);
   }
   pthread_exit(0);
 }
@@ -100,22 +100,22 @@ void *contraterrorista(void *arg)
   MUDA_ESTADO(n, ANDANDO);
   while (1)
   {
+    sleep(rand() % 10);
     pthread_mutex_lock(&lock_player);
-    if (estados[n].estado != MORTO)
-    {
-      printf("Contra-Terrorista %d \t estado: %d \n", n, estados[n].estado);
-      procura_combate(n);
-    }
     if (contador_rodadas_contraterrorista >= 15 || contador_rodadas_terrorista >= 15)
     {
       break;
+    }
+    if (estados[n].estado != MORTO && contador_terroristas > 0)
+    {
+      printf("Contra-Terrorista %d\n", n);
+      procura_combate(n);
     }
     if (contador_contraterrorista == 0 || contador_contraterrorista == 0)
     {
       reseta_rodada();
     }
     pthread_mutex_unlock(&lock_player);
-    sleep(rand() % 30);
   }
   pthread_exit(0);
 }
@@ -167,7 +167,6 @@ void procura_combate(int n)
   {
     pthread_mutex_lock(&lock_estado);
     MUDA_ESTADO(jogador_atacado, MORTO);
-    printf("Jogador atacado: %d \t Estado: %d \n", jogador_atacado, estados[jogador_atacado].estado);
     pthread_mutex_unlock(&lock_estado);
     pthread_mutex_lock(&lock_contador);
     if (jogador_atacado < TERRORISTA && contador_terroristas > 0)
@@ -182,7 +181,7 @@ void procura_combate(int n)
     }
     pthread_mutex_unlock(&lock_contador);
   }
-  printf("Contra-Terrorista: %d \tTerrorista: %d \n", contador_contraterrorista, contador_terroristas);
+  printf("\nContra-Terrorista: %d \tTerrorista: %d \n", contador_contraterrorista, contador_terroristas);
 }
 
 void mostra_dano(int jogador, int adversario, int dano)
@@ -190,11 +189,11 @@ void mostra_dano(int jogador, int adversario, int dano)
   /*Mostra dano e o jogador atacado*/
   if (jogador < TERRORISTA)
   {
-    printf("Terrorista %d atirou no Contra-Terrorista %d e deu dano de %d \n", jogador, adversario, dano);
+    printf("\nTerrorista %d atirou no Contra-Terrorista %d e deu dano de %d \n", jogador, adversario, dano);
   }
   else
   {
-    printf("Contra-Terrorista %d atirou no Terrorista %d e deu dano de %d \n", jogador, adversario, dano);
+    printf("\nContra-Terrorista %d atirou no Terrorista %d e deu dano de %d \n", jogador, adversario, dano);
   }
 }
 
@@ -218,11 +217,11 @@ void vencedor_da_rodada(int nro_terroristas, int nro_contraterrorista)
   if (nro_terroristas > 0)
   {
     contador_rodadas_terrorista += 1;
-    printf("Terroristas Venceram \n Rodadas Terroristas: %d \tRodadas Contra-Terrorista: %d\n", contador_rodadas_terrorista, contador_rodadas_contraterrorista);
+    printf("\n\n\nTerroristas Venceram \n Rodadas Terroristas: %d \tRodadas Contra-Terrorista: %d\n\n\n", contador_rodadas_terrorista, contador_rodadas_contraterrorista);
   }
   else if (nro_contraterrorista > 0)
   {
     contador_rodadas_contraterrorista += 1;
-    printf("Contra-Terroristas Venceram\n Rodadas Terroristas: %d \tRodadas Contra-Terrorista: %d\n", contador_rodadas_terrorista, contador_rodadas_contraterrorista);
+    printf("\n\n\nContra-Terroristas Venceram\n Rodadas Terroristas: %d \tRodadas Contra-Terrorista: %d\n\n\n", contador_rodadas_terrorista, contador_rodadas_contraterrorista);
   }
 }
