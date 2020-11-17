@@ -9,7 +9,6 @@
 #define CONTRATERRORISTA 5
 #define NRO_DE_JOGADORES TERRORISTA + CONTRATERRORISTA
 #define ANDANDO 0
-#define ATIRANDO 1
 #define PLANTANDO 2
 #define DESARMANDO 3
 #define MORTO 6
@@ -28,16 +27,19 @@ jogador estados[NRO_DE_JOGADORES];
 
 int contador_terroristas = TERRORISTA;
 int contador_contraterrorista = CONTRATERRORISTA;
+int contador_rodadas_terrorista = 0;
+int contador_rodadas_contraterrorista = 0;
 
-sem_t mutex_atualiza_dados;
+pthread_mutex_t lock_player = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock_estado = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock_contador = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t lock_batalha = PTHREAD_MUTEX_INITIALIZER;
 
 void *terrorista(void *arg);
 void *contraterrorista(void *arg);
 void procura_combate(int n);
 void mostra_dano(int jogador, int adversario, int dano);
+void reseta_rodada();
+void vencedor_da_rodada(int nro_terroristas, int nro_contraterroristas);
 
 int main()
 {
@@ -46,8 +48,6 @@ int main()
   srand(time(0));
 
   pthread_t jogadores[NRO_DE_JOGADORES];
-
-  sem_init(&mutex_atualiza_dados, 0, 1);
 
   for (int i = 0; i < NRO_DE_JOGADORES; i++)
   {
@@ -73,12 +73,23 @@ void *terrorista(void *arg)
   MUDA_ESTADO(n, ANDANDO);
   while (1)
   {
+    pthread_mutex_lock(&lock_player);
     if (estados[n].estado != MORTO)
     {
-      printf("Terrorista %d esta andando\n", n);
-      sleep(rand() % 30);
+
+      printf("Terrorista %d \t estado: %d\n", n, estados[n].estado);
       procura_combate(n);
     }
+    if (contador_rodadas_terrorista == 15 || contador_rodadas_contraterrorista == 15)
+    {
+      break;
+    }
+    if (contador_contraterrorista == 0 || contador_terroristas == 0)
+    {
+      reseta_rodada();
+    }
+    pthread_mutex_unlock(&lock_player);
+    sleep(rand() % 30);
   }
   pthread_exit(0);
 }
@@ -89,25 +100,31 @@ void *contraterrorista(void *arg)
   MUDA_ESTADO(n, ANDANDO);
   while (1)
   {
+    pthread_mutex_lock(&lock_player);
     if (estados[n].estado != MORTO)
     {
-      printf("Contra-Terrorista %d esta andando \n", n);
-      sleep(rand() % 30);
+      printf("Contra-Terrorista %d \t estado: %d \n", n, estados[n].estado);
       procura_combate(n);
     }
+    if (contador_rodadas_contraterrorista >= 15 || contador_rodadas_terrorista >= 15)
+    {
+      break;
+    }
+    if (contador_contraterrorista == 0 || contador_contraterrorista == 0)
+    {
+      reseta_rodada();
+    }
+    pthread_mutex_unlock(&lock_player);
+    sleep(rand() % 30);
   }
   pthread_exit(0);
 }
 
 void procura_combate(int n)
 {
-
-  /*Muda estado de quem esta atirando*/
-  MUDA_ESTADO(n, ATIRANDO);
-
   /*Calcula o dano que o tiro deu*/
   int dano = CALCULA_DANO;
-  int jogador_atacado;
+  int jogador_atacado = 0;
 
   /*Verfica se o jogador é terrorista ou contraterrorista*/
   if (n < TERRORISTA)
@@ -116,7 +133,6 @@ void procura_combate(int n)
     jogador_atacado = ACHA_INIMIGO(NRO_DE_JOGADORES, TERRORISTA);
 
     /*Procura jogador atacado que não esteja morto e pode continuar procurando enquanto não estiver morto*/
-    sem_wait(&mutex_atualiza_dados);
     while (estados[jogador_atacado].estado == MORTO)
     {
       jogador_atacado = ACHA_INIMIGO(NRO_DE_JOGADORES, TERRORISTA);
@@ -128,7 +144,6 @@ void procura_combate(int n)
     jogador_atacado = ACHA_INIMIGO(TERRORISTA, 0);
 
     /*Procura jogador atacado que não esteja morto e pode continuar procurando enquanto não estiver morto*/
-    sem_wait(&mutex_atualiza_dados);
     while (estados[jogador_atacado].estado == MORTO)
     {
       jogador_atacado = ACHA_INIMIGO(TERRORISTA, 0);
@@ -147,12 +162,12 @@ void procura_combate(int n)
     mostra_dano(n, jogador_atacado, dano);
   }
 
-  /*Printa o dano*/
   /*Atualiza os dados e contador da equipe*/
-  if (estados[jogador_atacado].vida >= 100 && estados[jogador_atacado].estado != MORTO)
+  if (estados[jogador_atacado].vida >= 100 && estados[jogador_atacado].estado != MORTO && estados[n].estado != MORTO)
   {
     pthread_mutex_lock(&lock_estado);
     MUDA_ESTADO(jogador_atacado, MORTO);
+    printf("Jogador atacado: %d \t Estado: %d \n", jogador_atacado, estados[jogador_atacado].estado);
     pthread_mutex_unlock(&lock_estado);
     pthread_mutex_lock(&lock_contador);
     if (jogador_atacado < TERRORISTA && contador_terroristas > 0)
@@ -167,8 +182,7 @@ void procura_combate(int n)
     }
     pthread_mutex_unlock(&lock_contador);
   }
-  sem_post(&mutex_atualiza_dados);
-  printf("Ainda temos vivos \nContra-Terrorista: %d \nTerrorista: %d \n", contador_contraterrorista, contador_terroristas);
+  printf("Contra-Terrorista: %d \tTerrorista: %d \n", contador_contraterrorista, contador_terroristas);
 }
 
 void mostra_dano(int jogador, int adversario, int dano)
@@ -181,5 +195,34 @@ void mostra_dano(int jogador, int adversario, int dano)
   else
   {
     printf("Contra-Terrorista %d atirou no Terrorista %d e deu dano de %d \n", jogador, adversario, dano);
+  }
+}
+
+void reseta_rodada()
+{
+  for (int i = 0; i < NRO_DE_JOGADORES; i++)
+  {
+    MUDA_ESTADO(i, ANDANDO);
+    estados[i].vida = 0;
+  }
+
+  pthread_mutex_lock(&lock_contador);
+  vencedor_da_rodada(contador_terroristas, contador_contraterrorista);
+  contador_contraterrorista = CONTRATERRORISTA;
+  contador_terroristas = TERRORISTA;
+  pthread_mutex_unlock(&lock_contador);
+}
+
+void vencedor_da_rodada(int nro_terroristas, int nro_contraterrorista)
+{
+  if (nro_terroristas > 0)
+  {
+    contador_rodadas_terrorista += 1;
+    printf("Terroristas Venceram \n Rodadas Terroristas: %d \tRodadas Contra-Terrorista: %d\n", contador_rodadas_terrorista, contador_rodadas_contraterrorista);
+  }
+  else if (nro_contraterrorista > 0)
+  {
+    contador_rodadas_contraterrorista += 1;
+    printf("Contra-Terroristas Venceram\n Rodadas Terroristas: %d \tRodadas Contra-Terrorista: %d\n", contador_rodadas_terrorista, contador_rodadas_contraterrorista);
   }
 }
